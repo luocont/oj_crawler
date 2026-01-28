@@ -61,20 +61,12 @@ npm run dev
 }
 ```
 
-### 洛谷 (Luogu)
-
-#### GET `/api/luogu/:username`
-
-获取洛谷用户数据。
-
-**参数：**
-- `username`（路径参数）：洛谷用户名
-
+### 对应oj的个人数据
 **示例请求：**
 ```bash
-curl http://localhost:8080/api/luogu/kkksc03
-curl http://localhost:8080/api/codeforces/kkksc03
-curl http://localhost:8080/api/nowcoders/kkksc03
+curl http://localhost:8080/api/luogu/<UID>
+curl http://localhost:8080/api/codeforces/<UID>
+curl http://localhost:8080/api/nowcoders/<USER_NAME>
 ```
 
 ## 项目结构
