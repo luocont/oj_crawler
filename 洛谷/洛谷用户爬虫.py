@@ -55,99 +55,6 @@ class CookieManager:
         return needed_cookies
 
 
-class ContestScraper:
-    """比赛榜单爬取功能"""
-
-    @staticmethod
-    def write_data(url_id, data):
-        """将json数据以易读的形式储存"""
-        with open(f'luogu_contest_{url_id}.json', 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-
-    @staticmethod
-    def get_data(url_id, cookie, contest_name, num):
-        """请求数据"""
-        all_results = []
-        contest_problems = []  # 用于存储比赛题目顺序
-
-        for i in range(1, num + 1):
-            api_url = f'https://www.luogu.com.cn/fe/api/contest/scoreboard/{url_id}?page={i}'
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-                'Referer': 'https://www.luogu.com.cn/contest/list',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-            response = requests.get(api_url, headers=headers, cookies=cookie, timeout=10)
-            if response.status_code == 200:
-                print(f'成功获取第 {i} 页数据！')
-                data = response.json()
-                # 将当前页的结果添加到总列表中
-                all_results.extend(data['scoreboard']['result'])
-                # 获取题目顺序（只在第一次请求时获取）
-                if i == 1 and 'scoreboard' in data and 'problems' in data['scoreboard']:
-                    contest_problems = [p['id'] for p in data['scoreboard']['problems']]
-                    print(f'获取到题目顺序: {contest_problems}')
-            else:
-                print(f'第 {i} 页请求失败。状态码: {response.status_code}')
-                print(f'响应内容: {response.text}')
-                return False
-        combined_data = {
-            'scoreboard': {
-                'result': all_results,
-                'problems': contest_problems  # 保存题目顺序
-            }
-        }
-        ContestScraper.show_contest_sig(combined_data, contest_name)
-        return combined_data
-
-    @staticmethod
-    def show_contest_sig(data, contest_name):
-        """绘制一个比赛的榜单"""
-        new_data = data['scoreboard']['result']
-
-        # 获取题目顺序 - 如果API中有题目顺序就用，否则按出题习惯排序
-        if 'problems' in data['scoreboard'] and data['scoreboard']['problems']:
-            # 使用API返回的题目顺序
-            all_problems = data['scoreboard']['problems']
-            print(f'使用API题目顺序: {all_problems}')
-        else:
-            # 如果API没有题目顺序，则按出题习惯排序（字母+数字）
-            problem_set = set()
-            for result in new_data:
-                problem_set.update(result['details'].keys())
-
-            # 自定义排序：先按字母，再按数字
-            def problem_key(problem):
-                match = re.match(r'([A-Z]+)(\d*)', problem)
-                if match:
-                    letters = match.group(1)
-                    num = int(match.group(2)) if match.group(2) else 0
-                    return (letters, num)
-                return (problem, 0)
-
-            all_problems = sorted(problem_set, key=problem_key)
-            print(f'使用自定义排序: {all_problems}')
-
-        df_data = []
-        for idx, result in enumerate(new_data):
-            row = {
-                '排名': idx + 1,
-                '用户名': result['user']['name'],
-                '总分': result['score']
-            }
-            for problem in all_problems:
-                if problem in result['details']:
-                    row[f'题目 {problem}'] = result['details'][problem]['score']
-                else:
-                    row[f'题目 {problem}'] = 0
-            df_data.append(row)
-
-        df = pd.DataFrame(df_data)
-        csv_filename = f'luogu_contest_{contest_name}.csv'
-        df.to_csv(csv_filename, index=False, encoding='utf-8-sig')
-        print(f'榜单数据已保存到 {csv_filename}，共 {len(df_data)} 条记录')
-
-
 class UserProfileScraper:
     """用户练习页面访问功能"""
 
@@ -168,6 +75,9 @@ class UserProfileScraper:
             print("⚠️  没有已通过的题目，跳过统计")
             return None
 
+        # 提取用户名,如果有的话
+        username = parsed_data.get('username', '')
+
         # 难度映射表
         difficulty_names = {
             1: '入门',
@@ -187,8 +97,11 @@ class UserProfileScraper:
             if pid:
                 difficulty_map[difficulty].append(pid)
 
-        # 生成CSV文件
-        csv_filename = f'luogu_statistics_{user_id}.csv'
+        # 生成CSV文件 - 优先使用用户名,如果没有则使用用户ID
+        if username:
+            csv_filename = f'luogu_statistics_{username}.csv'
+        else:
+            csv_filename = f'luogu_statistics_{user_id}.csv'
         try:
             with open(csv_filename, 'w', newline='', encoding='utf-8-sig') as csvfile:
                 writer = csv.writer(csvfile)
@@ -205,7 +118,10 @@ class UserProfileScraper:
 
                 writer.writerow(['总计', total, f'全部 {total} 道题目'])
 
+            # 提示使用的文件名来源
+            name_source = f"用户名: {username}" if username else f"用户ID: {user_id}"
             print(f"\n✅ 统计CSV文件已生成: {csv_filename}")
+            print(f"   (使用{name_source}命名)")
 
             # 显示统计信息
             print(f"\n📊 难度分布统计:")
@@ -254,12 +170,6 @@ class UserProfileScraper:
         except requests.exceptions.RequestException as e:
             print(f"❌ 请求发生错误: {e}")
             return None
-
-    @staticmethod
-    def save_response_to_file(user_id: str, response_text: str) -> str:
-        """将响应保存到文件（已禁用JSON保存）"""
-        # 不再保存JSON文件
-        pass
 
     @staticmethod
     def print_raw_response(response: requests.Response):
@@ -453,117 +363,115 @@ class LuoguScraperApp:
 
     def __init__(self):
         self.cookies = None
-        self.contest_scraper = ContestScraper()
         self.user_profile_scraper = UserProfileScraper()
         self.cookie_manager = CookieManager()
 
-        # 比赛配置
-        self.contest_config = {
-            'JYU每日一题': {
-                'url_id': '287100',
-                'pages': 3
-            },
-        }
+    def read_user_ids_from_file(self, file_path: str) -> List[str]:
+        """从txt文件读取用户ID列表"""
+        user_ids = []
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    # 跳过空行和注释行（以#开头）
+                    if line and not line.startswith('#'):
+                        user_ids.append(line)
+            print(f"✅ 从文件中读取到 {len(user_ids)} 个用户ID")
+            return user_ids
+        except FileNotFoundError:
+            print(f"❌ 文件不存在: {file_path}")
+            return []
+        except Exception as e:
+            print(f"❌ 读取文件失败: {e}")
+            return []
 
-    def show_main_menu(self):
-        """显示主菜单"""
-        print("\n" + "="*50)
-        print("🎯 洛谷数据爬取工具 v2.0")
-        print("="*50)
-        print("[1] 爬取比赛榜单")
-        print("[2] 访问用户练习页面")
-        print("[3] 退出程序")
-        print("="*50)
+    def scrape_single_user(self, user_id: str, verbose: bool = True) -> bool:
+        """爬取单个用户数据"""
+        if verbose:
+            print(f"\n{'='*60}")
+            print(f"📊 正在爬取用户: {user_id}")
+            print(f"{'='*60}")
 
-    def get_menu_choice(self, max_choice: int) -> int:
-        """获取用户菜单选择"""
-        while True:
-            try:
-                choice = input("\n请选择功能 (1-{}): ".format(max_choice))
-                choice_num = int(choice)
-                if 1 <= choice_num <= max_choice:
-                    return choice_num
-                else:
-                    print(f"❌ 请输入 1 到 {max_choice} 之间的数字")
-            except ValueError:
-                print("❌ 请输入有效的数字")
+        # 获取用户练习页面
+        response = self.user_profile_scraper.get_user_practice(user_id, self.cookies)
 
-    def scrape_contest_scoreboard(self):
-        """爬取比赛榜单"""
-        print("\n📋 开始爬取比赛榜单...")
-        print("-"*50)
+        if response is None:
+            print(f"❌ 用户 {user_id} 请求失败")
+            return False
 
-        # 显示可用的比赛
-        print("可用的比赛:")
-        for idx, (name, info) in enumerate(self.contest_config.items(), 1):
-            print(f"  {idx}. {name} (URL ID: {info['url_id']}, {info['pages']} 页)")
+        # 解析响应
+        parsed_data = self.user_profile_scraper.parse_practice_response(response)
 
-        print("\n开始爬取...")
-        for contest_name, info in self.contest_config.items():
-            print(f"\n📊 正在爬取榜单: {contest_name} (共 {info['pages']} 页)")
-            result = self.contest_scraper.get_data(
-                url_id=info['url_id'],
-                cookie=self.cookies,
-                contest_name=contest_name,
-                num=info['pages']
-            )
-            if result:
-                print(f"✅ {contest_name} 爬取完成！")
-            else:
-                print(f"❌ {contest_name} 爬取失败！")
-
-        print("\n✅ 所有比赛榜单爬取完成！")
-
-    def access_user_practice(self):
-        """访问用户练习页面"""
-        print("\n👤 访问用户练习页面")
-        print("-"*50)
-
-        while True:
-            user_id = input("\n请输入用户ID (例如: 1455204, 输入 'q' 返回): ").strip()
-
-            if user_id.lower() == 'q':
-                return
-
-            if not user_id:
-                print("❌ 用户ID不能为空")
-                continue
-
-            # 验证用户ID格式（应该是数字）
-            if not user_id.isdigit():
-                print("❌ 用户ID应该是数字")
-                continue
-
-            # 获取用户练习页面
-            response = self.user_profile_scraper.get_user_practice(user_id, self.cookies)
-
-            if response is None:
-                print("❌ 请求失败，请重试")
-                continue
-
-            # 打印原始响应
-            self.user_profile_scraper.print_raw_response(response)
-
-            # 解析响应
-            parsed_data = self.user_profile_scraper.parse_practice_response(response)
-
-            # 显示解析后的数据
+        # 显示解析后的数据（可选）
+        if verbose:
             self.user_profile_scraper.display_parsed_data(parsed_data)
 
-            # 自动生成难度统计CSV文件
+        # 生成难度统计CSV文件
+        if verbose:
             print("\n📊 正在生成难度统计...")
-            csv_file = self.user_profile_scraper.generate_difficulty_statistics(parsed_data, user_id)
-            if csv_file:
-                print(f"💡 提示: 可以使用 Excel 或其他工具打开 {csv_file} 查看详细统计")
+        csv_file = self.user_profile_scraper.generate_difficulty_statistics(parsed_data, user_id)
+        if csv_file and verbose:
+            print(f"💡 提示: 可以使用 Excel 或其他工具打开 {csv_file} 查看详细统计")
 
-            # 询问是否继续
-            continue_choice = input("\n是否继续查看其他用户？(y/n): ").strip().lower()
-            if continue_choice != 'y':
-                break
+        return True
+
+    def batch_scrape_users(self, user_ids: List[str], delay: float = 1.0):
+        """批量爬取用户数据"""
+        print(f"\n🚀 开始批量爬取 {len(user_ids)} 个用户数据")
+        print(f"⏱️  请求间隔: {delay} 秒")
+        print("="*60)
+
+        success_count = 0
+        failed_users = []
+
+        for idx, user_id in enumerate(user_ids, 1):
+            print(f"\n📈 进度: [{idx}/{len(user_ids)}]")
+
+            if not user_id.isdigit():
+                print(f"⚠️  跳过无效的用户ID: {user_id}")
+                failed_users.append((user_id, "无效的用户ID格式"))
+                continue
+
+            success = self.scrape_single_user(user_id, verbose=True)
+            if success:
+                success_count += 1
+            else:
+                failed_users.append((user_id, "请求失败"))
+
+            # 如果不是最后一个用户，添加延迟
+            if idx < len(user_ids):
+                print(f"\n⏳ 等待 {delay} 秒后继续...")
+                time.sleep(delay)
+
+        # 打印总结
+        print("\n" + "="*60)
+        print("📊 批量爬取完成！")
+        print("="*60)
+        print(f"✅ 成功: {success_count} 个用户")
+        print(f"❌ 失败: {len(failed_users)} 个用户")
+
+        if failed_users:
+            print(f"\n失败的用户列表:")
+            for user_id, reason in failed_users:
+                print(f"  - {user_id}: {reason}")
+
+        print("="*60)
+
+    def batch_scrape_from_file(self, file_path: str = './user_ids.txt', delay: float = 1.0):
+        """从txt文件批量爬取用户数据"""
+        # 读取用户ID列表
+        user_ids = self.read_user_ids_from_file(file_path)
+
+        if not user_ids:
+            print(f"❌ 未从 {file_path} 读取到有效的用户ID")
+            return
+
+        # 开始批量爬取
+        self.batch_scrape_users(user_ids, delay=delay)
 
     def run(self):
         """运行应用"""
-        print("🚀 启动洛谷数据爬取工具...")
+        print("🚀 启动洛谷用户数据爬取工具...")
 
         # 获取 cookies
         self.cookies = self.cookie_manager.get_cookies_from_browser()
@@ -574,46 +482,11 @@ class LuoguScraperApp:
 
         print("\n✅ Cookie 获取成功！")
 
-        # 主循环
-        while True:
-            self.show_main_menu()
-            choice = self.get_menu_choice(3)
+        # 直接从user_ids.txt读取并批量爬取
+        print("\n📂 正在读取 user_ids.txt...")
+        self.batch_scrape_from_file('user_ids.txt', delay=1.0)
 
-            if choice == 1:
-                # 爬取比赛榜单
-                self.scrape_contest_scoreboard()
-            elif choice == 2:
-                # 访问用户练习页面
-                self.access_user_practice()
-            elif choice == 3:
-                # 退出程序
-                print("\n👋 感谢使用，再见！")
-                break
-
-            # 完成操作后暂停
-            if choice in [1, 2]:
-                input("\n按 Enter 键返回主菜单...")
-
-
-# 为了保持向后兼容，保留原有的函数作为简单函数的别名
-def get_cookies_from_browser(url='https://www.luogu.com.cn', wait_time=40):
-    """从浏览器获取 cookies（向后兼容函数）"""
-    return CookieManager.get_cookies_from_browser(url, wait_time)
-
-
-def write_data(url_id, data):
-    """将json数据以易读的形式储存（向后兼容函数）"""
-    ContestScraper.write_data(url_id, data)
-
-
-def get_data(url_id, cookie, contest_name, num):
-    """请求数据（向后兼容函数）"""
-    return ContestScraper.get_data(url_id, cookie, contest_name, num)
-
-
-def show_contest_sig(data, contest_name):
-    """绘制一个比赛的榜单（向后兼容函数）"""
-    ContestScraper.show_contest_sig(data, contest_name)
+        print("\n👋 感谢使用，再见！")
 
 
 def main():
