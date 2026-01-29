@@ -60,11 +60,14 @@ export class ProxyPool {
     }
 
     // 按评分分组
-    const scored = activeProxies.map(p => ({
-      ...p,
-      score: calculateScore(p),
-      tier: getTier(calculateScore(p))
-    }));
+    const scored = activeProxies.map(p => {
+      const score = calculateScore(p);
+      return {
+        ...p,
+        score,
+        tier: getTier(score)
+      };
+    });
 
     // 根据配置比例选择
     const rand = Math.random();
@@ -93,6 +96,14 @@ export class ProxyPool {
    * @param {number} responseTime - 响应时间
    */
   recordSuccess(proxy, responseTime) {
+    // 参数验证
+    if (!proxy || typeof proxy.ip !== 'string' || typeof proxy.port !== 'number') {
+      throw new Error('无效的代理对象');
+    }
+    if (typeof responseTime !== 'number' || responseTime < 0 || !Number.isFinite(responseTime)) {
+      throw new Error('responseTime 必须是有效的非负数');
+    }
+
     const p = this.proxies.find(p => p.ip === proxy.ip && p.port === proxy.port);
     if (p) {
       p.successCount = (p.successCount || 0) + 1;
@@ -113,6 +124,11 @@ export class ProxyPool {
    * @param {Object} proxy - 代理对象
    */
   recordFailure(proxy) {
+    // 参数验证
+    if (!proxy || typeof proxy.ip !== 'string' || typeof proxy.port !== 'number') {
+      throw new Error('无效的代理对象');
+    }
+
     const p = this.proxies.find(p => p.ip === proxy.ip && p.port === proxy.port);
     if (p) {
       p.failCount = (p.failCount || 0) + 1;
