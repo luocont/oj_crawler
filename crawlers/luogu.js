@@ -1,4 +1,4 @@
-import { proxyGet } from '../proxyPool/middleware.js'
+import { proxyGet, ProxyRequestError, ErrorCode } from '../proxyPool/middleware.js'
 
 // 难度映射
 const DIFFICULTY_MAP = {
@@ -15,19 +15,40 @@ const DIFFICULTY_MAP = {
  * 获取洛谷用户信息
  */
 async function getUserInfo(keyword) {
-  const searchRes = await proxyGet(
-    'https://www.luogu.com.cn/api/user/search',
-    { query: { keyword: keyword } }
-  )
-
-  if (!searchRes.ok) {
-    throw new Error(`Server Response Error: ${searchRes.status}`)
+  let searchRes;
+  try {
+    searchRes = await proxyGet(
+      'https://www.luogu.com.cn/api/user/search',
+      {
+        query: { keyword: keyword },
+        timeout: 10000 // 10秒超时
+      }
+    )
+  } catch (error) {
+    // 网络请求错误处理
+    if (error instanceof ProxyRequestError) {
+      throw new Error(`获取用户信息失败: ${error.message}`);
+    }
+    throw new Error(`获取用户信息时发生网络错误: ${error.message}`);
   }
 
-  const searchJSON = JSON.parse(searchRes.text)
+  if (!searchRes.ok) {
+    throw new Error(`服务器响应错误: ${searchRes.status} ${searchRes.statusText || ''}`)
+  }
+
+  let searchJSON;
+  try {
+    searchJSON = JSON.parse(searchRes.text)
+  } catch (error) {
+    throw new Error(`解析用户搜索数据失败: ${error.message}`)
+  }
+
+  if (!searchJSON.users || searchJSON.users.length === 0) {
+    throw new Error('用户不存在')
+  }
 
   if (searchJSON.users[0] == null) {
-    throw new Error('The user does not exist')
+    throw new Error('用户不存在')
   }
 
   return {
@@ -68,22 +89,47 @@ function getUserJson(text) {
  */
 export async function crawlLuoguUser(input) {
   if (!input) {
-    throw new Error('Please enter username')
+    throw new Error('请输入用户名')
   }
 
   // 1. 先通过搜索接口获取用户信息(包含name)
-  const userInfo = await getUserInfo(input)
-
-  // 2. 访问用户练习页面获取数据
-  const res = await proxyGet(
-    'https://www.luogu.com.cn/user/' + userInfo.uid + '/practice'
-  )
-
-  if (!res.ok) {
-    throw new Error(`Server Response Error: ${res.status}`)
+  let userInfo;
+  try {
+    userInfo = await getUserInfo(input)
+  } catch (error) {
+    throw error; // 重新抛出已经处理过的错误
   }
 
-  const userJson = getUserJson(res.text)
+  // 2. 访问用户练习页面获取数据
+  let res;
+  try {
+    res = await proxyGet(
+      'https://www.luogu.com.cn/user/' + userInfo.uid + '/practice',
+      { timeout: 15000 } // 15秒超时
+    )
+  } catch (error) {
+    // 网络请求错误处理
+    if (error instanceof ProxyRequestError) {
+      throw new Error(`获取用户练习数据失败: ${error.message}`);
+    }
+    throw new Error(`获取用户练习数据时发生网络错误: ${error.message}`);
+  }
+
+  if (!res.ok) {
+    throw new Error(`服务器响应错误: ${res.status} ${res.statusText || ''}`)
+  }
+
+  let userJson;
+  try {
+    userJson = getUserJson(res.text)
+  } catch (error) {
+    throw new Error(`解析用户练习数据失败: ${error.message}`)
+  }
+
+  // 验证数据结构
+  if (!userJson || !userJson.data) {
+    throw new Error('用户练习数据格式异常')
+  }
 
   // 获取通过的题目列表
   const passedProblems = userJson.data?.passed || []
