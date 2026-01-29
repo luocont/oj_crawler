@@ -63,23 +63,33 @@ export function initScheduler() {
     if (config.refresh.fetchOnStart) {
       refreshProxyPool();
     }
+  }).catch(error => {
+    console.error('[Scheduler] 加载历史代理失败:', error.message);
   });
 
   // 定时刷新
   cron.schedule('*/30 * * * *', async () => {
-    const stats = proxyPool.getStats();
+    try {
+      const stats = proxyPool.getStats();
 
-    // 定时刷新（每30分钟检查一次）
-    if (stats.active < config.refresh.minProxies) {
-      console.log('[Scheduler] 可用代理数量低于阈值，触发刷新');
-      await refreshProxyPool();
+      // 定时刷新（每30分钟检查一次）
+      if (stats.active < config.refresh.minProxies) {
+        console.log('[Scheduler] 可用代理数量低于阈值，触发刷新');
+        await refreshProxyPool();
+      }
+    } catch (error) {
+      console.error('[Scheduler] 定时任务执行失败:', error.message);
     }
   });
 
   // 每小时自动刷新
-  cron.schedule('0 * * * *', () => {
-    console.log('[Scheduler] 定时刷新触发');
-    refreshProxyPool();
+  cron.schedule('0 * * * *', async () => {
+    try {
+      console.log('[Scheduler] 定时刷新触发');
+      await refreshProxyPool();
+    } catch (error) {
+      console.error('[Scheduler] 每小时定时任务执行失败:', error.message);
+    }
   });
 
   console.log('[Scheduler] 调度器已启动');
