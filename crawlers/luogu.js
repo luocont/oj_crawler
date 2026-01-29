@@ -1,4 +1,4 @@
-import request from 'superagent'
+import { proxyGet } from '../proxyPool/middleware.js'
 
 // 难度映射
 const DIFFICULTY_MAP = {
@@ -15,9 +15,10 @@ const DIFFICULTY_MAP = {
  * 获取洛谷用户信息
  */
 async function getUserInfo(keyword) {
-  const searchRes = await request
-    .get('https://www.luogu.com.cn/api/user/search')
-    .query({ keyword: keyword })
+  const searchRes = await proxyGet(
+    'https://www.luogu.com.cn/api/user/search',
+    { query: { keyword: keyword } }
+  )
 
   if (!searchRes.ok) {
     throw new Error(`Server Response Error: ${searchRes.status}`)
@@ -74,8 +75,9 @@ export async function crawlLuoguUser(input) {
   const userInfo = await getUserInfo(input)
 
   // 2. 访问用户练习页面获取数据
-  const res = await request
-    .get('https://www.luogu.com.cn/user/' + userInfo.uid + '/practice')
+  const res = await proxyGet(
+    'https://www.luogu.com.cn/user/' + userInfo.uid + '/practice'
+  )
 
   if (!res.ok) {
     throw new Error(`Server Response Error: ${res.status}`)

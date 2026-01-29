@@ -1,4 +1,4 @@
-import request from 'superagent'
+import { proxyGet } from '../proxyPool/middleware.js'
 
 const MAX_PAGE_SIZE = 10000
 
@@ -19,9 +19,10 @@ async function queryForNumber(username, pageCount, acSet) {
 
   let res = null
   try {
-    res = await request
-      .get('http://codeforces.com/api/user.status')
-      .query(queryObject)
+    res = await proxyGet(
+      'http://codeforces.com/api/user.status',
+      { query: queryObject }
+    )
   } catch (e) {
     if (e.response && e.response.body && e.response.body.status) {
       const comment = e.response.body.comment

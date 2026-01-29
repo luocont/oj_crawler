@@ -1,4 +1,4 @@
-import request from 'superagent'
+import { proxyGet } from '../proxyPool/middleware.js'
 import * as cheerio from 'cheerio'
 
 /**
@@ -27,15 +27,18 @@ export async function crawlNowCoder(username) {
 
   // 循环获取所有提交记录
   while (true) {
-    const res = await request
-      .get(`https://ac.nowcoder.com/acm/contest/profile/${username}/practice-coding`)
-      .query({
-        pageSize: 200,
-        statusTypeFilter: 5,        // 5表示AC状态
-        languageCategoryFilter: -1, // -1表示所有语言
-        orderType: 'DESC',
-        page,
-      })
+    const res = await proxyGet(
+      `https://ac.nowcoder.com/acm/contest/profile/${username}/practice-coding`,
+      {
+        query: {
+          pageSize: 200,
+          statusTypeFilter: 5,        // 5表示AC状态
+          languageCategoryFilter: -1, // -1表示所有语言
+          orderType: 'DESC',
+          page,
+        }
+      }
+    )
 
     if (!res.ok) {
       throw new Error(`服务器响应错误: ${res.status}`)

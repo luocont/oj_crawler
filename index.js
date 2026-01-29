@@ -3,9 +3,14 @@ import cors from 'cors'
 import { crawlLuoguUser } from './crawlers/luogu.js'
 import { fetchCodeforcesData } from './crawlers/codeforces.js'
 import { crawlNowCoder } from './crawlers/nowcoder.js'
+import { initScheduler, refreshProxyPool } from './proxyPool/scheduler.js'
+import { proxyPool } from './proxyPool/pool.js'
 
 const app = express()
 const PORT = process.env.PORT || 8080
+
+// 初始化代理池调度器
+initScheduler()
 
 // 中间件
 app.use(cors())
@@ -21,6 +26,11 @@ app.get('/', (req, res) => {
       luogu: '/api/luogu/:username',
       codeforces: '/api/codeforces/:uid',
       nowcoder: '/api/nowcoder/:uid'
+    },
+    proxyPool: {
+      status: '/api/proxy/status',
+      refresh: '/api/proxy/refresh',
+      list: '/api/proxy/list'
     }
   })
 })
@@ -95,6 +105,50 @@ app.get('/api/nowcoder/:uid', async (req, res) => {
       error: error.message,
     })
   }
+})
+
+// ==================== 代理池管理路由 ====================
+// 获取代理池状态
+app.get('/api/proxy/status', (req, res) => {
+  const stats = proxyPool.getStats()
+  res.json({
+    success: true,
+    data: stats
+  })
+})
+
+// 手动刷新代理池
+app.post('/api/proxy/refresh', async (req, res) => {
+  try {
+    const result = await refreshProxyPool()
+    res.json({
+      success: true,
+      message: '代理池刷新成功',
+      data: result
+    })
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  }
+})
+
+// 获取所有代理列表
+app.get('/api/proxy/list', (req, res) => {
+  const proxies = proxyPool.getAllProxies()
+  res.json({
+    success: true,
+    data: proxies.map(p => ({
+      ip: p.ip,
+      port: p.port,
+      protocol: p.protocol,
+      status: p.status,
+      successCount: p.successCount || 0,
+      failCount: p.failCount || 0,
+      avgResponseTime: p.avgResponseTime || 0
+    }))
+  })
 })
 
 // ==================== 错误处理中间件 ====================
