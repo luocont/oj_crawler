@@ -1,0 +1,2 @@
+# 此文件用于确保data目录被Git跟踪
+# data目录用于存储代理池的持久化数据，如proxies.json
