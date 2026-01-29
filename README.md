@@ -17,13 +17,26 @@
 - Node.js >= 18.0.0
 - npm >= 9.0.0
 
-### 安装依赖
+### 1. 克隆项目
+
+```bash
+git clone <repository-url>
+cd daliy_problem-data
+```
+
+### 2. 安装依赖
 
 ```bash
 npm install
 ```
 
-### 启动服务
+安装完成后，你会看到以下依赖：
+- `express` - Web 服务框架
+- `superagent` - HTTP 请求库
+- `cheerio` - HTML 解析
+- `node-cron` - 定时任务调度
+
+### 3. 启动服务
 
 ```bash
 # 生产模式
@@ -33,17 +46,77 @@ npm start
 npm run dev
 ```
 
-服务将在 `http://localhost:8080` 启动。
+**启动成功后，你会看到：**
+```
+========================================
+统一爬虫微服务已启动！
+访问地址: http://localhost:8080
+========================================
+API 接口:
+  洛谷:       http://localhost:8080/api/luogu/:username
+  Codeforces: http://localhost:8080/api/codeforces/:uid
+  牛客网:     http://localhost:8080/api/nowcoder/:uid
+========================================
+[Scheduler] 加载了 X 个历史代理
+[Scheduler] 调度器已启动
+```
 
-### 测试代理池功能
+> **注意**：首次启动时，代理池会自动获取免费代理。由于免费代理的稳定性，这个过程可能需要一些时间。如果代理获取失败，服务会自动降级到直连模式，不影响爬虫功能。
+
+### 4. 验证服务
+
+**检查服务状态：**
+```bash
+curl http://localhost:8080/health
+```
+
+**测试爬虫功能：**
+```bash
+# 洛谷用户数据
+curl http://localhost:8080/api/luogu/kzn
+
+# Codeforces 用户数据
+curl http://localhost:8080/api/codeforces/tourist
+
+# 牛客网用户数据（需要用户ID，纯数字）
+curl http://localhost:8080/api/nowcoder/541780
+```
+
+**查看代理池状态：**
+```bash
+# 获取代理池状态
+curl http://localhost:8080/api/proxy/status
+
+# 手动刷新代理池
+curl -X POST http://localhost:8080/api/proxy/refresh
+
+# 查看代理列表
+curl http://localhost:8080/api/proxy/list
+```
+
+### 5. （可选）运行测试脚本
 
 ```bash
-# 基础测试
+# 基础功能测试
 node test-proxy.js
 
 # 完整测试（包含爬虫）
 node test-proxy.js --test-crawlers
 ```
+
+### 常见问题
+
+**Q: 启动后提示代理获取失败？**
+A: 这是正常现象。免费代理源可能不稳定，系统会自动降级到直连模式，爬虫功能正常使用。
+
+**Q: 如何修改服务端口？**
+A: 使用环境变量 `PORT`：
+```bash
+PORT=3000 npm start
+```
+
+**Q: 如何禁用代理池？**
+A: 编辑 `proxyPool/config.js`，将 `refresh.fetchOnStart` 设为 `false`。但建议保持启用，以提高爬虫稳定性。
 
 ## 📡 API 接口
 
