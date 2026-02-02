@@ -141,3 +141,195 @@ export async function crawlNowCoder(username) {
     solvedList: [...solvedList],
   }
 }
+
+const RANK_REQUEST_TIMEOUT = 12000 // 12秒超时
+const RANK_PAGE_LOAD_TIMEOUT = 120000 // 整体爬取超时（120秒）
+const RANK_MAX_PAGES = 100 // 最大页数限制
+
+/**
+ * 爬取牛客网比赛排名数据
+ * @param {string|number} contestId - 比赛ID
+ * @returns {Promise<Object>} 返回比赛排名数据
+ */
+export async function crawlNowCoderContestRank(contestId) {
+  // 参数校验
+  if (!contestId) {
+    throw new Error('请输入比赛ID')
+  }
+
+  if (isNaN(contestId)) {
+    throw new Error('比赛ID必须是数字格式')
+  }
+
+  contestId = Number(contestId)
+
+  let contestName = null
+  let totalParticipants = 0
+  const rankList = []
+  const problems = []
+
+  const startTime = Date.now()
+  let page = 1
+  let hasMoreData = true
+
+  // 循环获取所有页的排名数据
+  while (hasMoreData) {
+    // 检查总超时时间
+    if (Date.now() - startTime > RANK_PAGE_LOAD_TIMEOUT) {
+      console.warn(`[NowCoder] 获取比赛排名超时（超过${RANK_PAGE_LOAD_TIMEOUT/1000}秒），已获取 ${rankList.length} 条记录`)
+      break
+    }
+
+    // 检查最大页数限制
+    if (page > RANK_MAX_PAGES) {
+      console.warn(`[NowCoder] 达到最大页数限制(${RANK_MAX_PAGES})，停止分页`)
+      break
+    }
+
+    let res
+    try {
+      // 使用牛客网实时排名API，支持分页
+      res = await proxyGet(
+        `https://ac.nowcoder.com/acm-heavy/acm/contest/real-time-rank-data`,
+        {
+          query: {
+            token: '',
+            id: contestId,
+            page: page,
+            limit: 0, // 0表示获取当前页全部数据
+            _: Date.now()
+          },
+          timeout: RANK_REQUEST_TIMEOUT
+        }
+      )
+    } catch (error) {
+      if (error instanceof ProxyRequestError) {
+        throw new Error(`获取比赛排名失败(第${page}页): ${error.message}`)
+      }
+      throw new Error(`获取比赛排名时发生网络错误(第${page}页): ${error.message}`)
+    }
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        throw new Error('比赛不存在')
+      }
+      throw new Error(`服务器响应错误: ${res.status} ${res.statusText || ''}`)
+    }
+
+    let data
+    try {
+      data = JSON.parse(res.text)
+    } catch (error) {
+      throw new Error(`解析排名数据失败(第${page}页): ${error.message}`)
+    }
+
+    // 检查API响应
+    if (!data || data.code !== 0 || !data.data) {
+      if (data && (data.msg === '比赛不存在' || data.msg === 'contest not exist')) {
+        throw new Error('比赛不存在')
+      }
+      throw new Error(`API返回错误: ${data?.msg || '未知错误'}`)
+    }
+
+    const rankData = data.data
+
+    // 首次获取时，提取比赛名称
+    if (contestName == null) {
+      // 获取比赛名称（从比赛页面）
+      try {
+        const pageRes = await proxyGet(
+          `https://ac.nowcoder.com/acm/contest/${contestId}`,
+          { timeout: RANK_REQUEST_TIMEOUT }
+        )
+        if (pageRes.ok) {
+          const $ = cheerio.load(pageRes.text)
+          contestName = $('.contest-name').text().trim() ||
+                        $('h1').first().text().trim() ||
+                        $('title').text().trim() ||
+                        `比赛${contestId}`
+        }
+      } catch (e) {
+        // 忽略获取比赛名称的错误
+        console.warn(`[NowCoder] 获取比赛名称失败: ${e.message}`)
+      }
+
+      if (!contestName) {
+        contestName = `比赛${contestId}`
+      }
+
+      // 提取题目信息
+      if (rankData.problemData && Array.isArray(rankData.problemData)) {
+        rankData.problemData.forEach(problem => {
+          problems.push({
+            id: problem.name || problem.problemId || '',
+            title: problem.name || `题目${problem.problemId || ''}`,
+            acceptCount: problem.acceptedCount || problem.acceptCount || 0,
+            submitCount: problem.submitCount || 0
+          })
+        })
+      }
+    }
+
+    // 提取排名数据
+    if (rankData.rankData && Array.isArray(rankData.rankData)) {
+      if (rankData.rankData.length === 0) {
+        // 没有更多数据
+        hasMoreData = false
+        break
+      }
+
+      rankData.rankData.forEach((item, index) => {
+        try {
+          const ranking = {
+            rank: item.ranking || ((page - 1) * 50 + index + 1),
+            userId: item.uid?.toString() || '',
+            username: item.userName || '',
+            avatar: item.userAvatar || '',
+            school: item.school || '',
+            solved: item.acceptedCount || 0,
+            score: item.fullScore || 0,
+            timeCost: Math.floor((item.penaltyTime || 0) / 1000), // 转换为秒
+            submitCount: 0,
+            problemScores: {}
+          }
+
+          // 提取各题状态
+          if (item.scoreList && Array.isArray(item.scoreList)) {
+            let totalSubmissions = 0
+            item.scoreList.forEach(scoreItem => {
+              const problemId = problems.find(p => p.id === scoreItem.problemId || p.title === scoreItem.problemId)?.id || scoreItem.problemId
+              ranking.problemScores[problemId] = scoreItem.accepted ? 100 : 0
+              if (scoreItem.submit) {
+                totalSubmissions++
+              }
+            })
+            ranking.submitCount = totalSubmissions
+          }
+
+          rankList.push(ranking)
+        } catch (e) {
+          console.warn(`[NowCoder] 跳过异常记录: ${e.message}`)
+        }
+      })
+
+      // 如果这一页的数据少于50条，说明已经是最后一页
+      if (rankData.rankData.length < 50) {
+        hasMoreData = false
+      }
+    } else {
+      // 没有排名数据
+      hasMoreData = false
+    }
+
+    page += 1
+  }
+
+  totalParticipants = rankList.length
+
+  return {
+    contestName,
+    totalParticipants,
+    rankList,
+    problems
+  }
+}
