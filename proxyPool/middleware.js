@@ -116,6 +116,24 @@ export async function proxyRequest(method, url, options = {}) {
   // 默认超时时间
   const defaultTimeout = options.timeout || config.fetch?.timeout || 10000;
 
+  // 如果代理未启用，直接使用直连
+  if (!config.enabled) {
+    console.log('[ProxyMiddleware] 代理已禁用，使用直连模式');
+    try {
+      let req = request(method.toLowerCase(), url);
+      if (options.query) req = req.query(options.query);
+      if (options.data) req = req.send(options.data);
+      if (options.headers) req = req.set(options.headers);
+      req = req.timeout(defaultTimeout);
+
+      const res = await req;
+      return res;
+    } catch (error) {
+      const { code, message } = classifyError(error);
+      throw new ProxyRequestError(message, code, error);
+    }
+  }
+
   while (attempt < config.retry.maxAttempts) {
     attempt++;
 
