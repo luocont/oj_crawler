@@ -266,9 +266,17 @@ export async function crawlNowCoderContestRank(contestId) {
 
       // 提取题目信息
       if (rankData.problemData && Array.isArray(rankData.problemData)) {
-        rankData.problemData.forEach(problem => {
+        // 按照字母顺序排序（A, B, C...）
+        const sortedProblems = [...rankData.problemData].sort((a, b) => {
+          const nameA = (a.name || '').toUpperCase()
+          const nameB = (b.name || '').toUpperCase()
+          return nameA.localeCompare(nameB)
+        })
+
+        sortedProblems.forEach(problem => {
           problems.push({
-            id: problem.name || problem.problemId || '',
+            id: problem.name || problem.problemId || '',        // 题目字母 (A, B, C...)
+            problemId: problem.problemId || '',                  // 题目数字ID
             title: problem.name || `题目${problem.problemId || ''}`,
             acceptCount: problem.acceptedCount || problem.acceptCount || 0,
             submitCount: problem.submitCount || 0
@@ -297,17 +305,40 @@ export async function crawlNowCoderContestRank(contestId) {
             score: item.fullScore || 0,
             timeCost: Math.floor((item.penaltyTime || 0) / 1000), // 转换为秒
             submitCount: 0,
-            problemScores: {}
+            problemScores: {},
+            problemDetails: {} // ACM模式的详细信息
           }
 
-          // 提取各题状态
+          // 提取各题状态和ACM详细信息
           if (item.scoreList && Array.isArray(item.scoreList)) {
             let totalSubmissions = 0
             item.scoreList.forEach(scoreItem => {
-              const problemId = problems.find(p => p.id === scoreItem.problemId || p.title === scoreItem.problemId)?.id || scoreItem.problemId
-              ranking.problemScores[problemId] = scoreItem.accepted ? 100 : 0
+              // 查找题目字母（A, B, C...）和题目ID
+              const problemInfo = problems.find(p => p.problemId === scoreItem.problemId)
+              const problemLetter = problemInfo?.id || scoreItem.problemId?.toString() || ''
+              const problemIdNum = scoreItem.problemId || problemInfo?.problemId || ''
+
+              // 基础得分（AC为100，否则为0）
+              ranking.problemScores[problemLetter] = scoreItem.accepted ? 100 : 0
               if (scoreItem.submit) {
                 totalSubmissions++
+              }
+
+              // ACM模式的详细信息，同时包含题目字母和题目ID
+              ranking.problemDetails[problemLetter] = {
+                accepted: scoreItem.accepted || false,
+                acceptedTime: scoreItem.acceptedTime || -1,
+                failedCount: scoreItem.failedCount || 0,
+                finishJudge: scoreItem.finishJudge || false,
+                firstBlood: scoreItem.firstBlood || false,
+                fullScore: scoreItem.fullScore || 0,
+                problemId: problemIdNum,          // 题目数字ID
+                problemLetter: problemLetter,      // 题目字母 (A, B, C...)
+                score: scoreItem.score || 0,
+                submissionId: scoreItem.submissionId || 0,
+                submit: scoreItem.submit || false,
+                timeConsumption: scoreItem.timeConsumption || 0,
+                waitingJudgeCount: scoreItem.waitingJudgeCount || 0
               }
             })
             ranking.submitCount = totalSubmissions
