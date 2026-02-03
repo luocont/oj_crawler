@@ -1,5 +1,8 @@
 // 代理池配置
 export default {
+  // 是否启用代理（true: 启用代理, false: 直连模式）
+  enabled: false,
+
   // 代理源API列表
   proxySources: [
     'https://api.proxyscrape.com/v2/?request=get&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all',

@@ -1,7 +1,7 @@
 import { proxyGet, ProxyRequestError, ErrorCode } from '../proxyPool/middleware.js'
 import * as cheerio from 'cheerio'
 
-const MAX_PAGES = 50 // 最大页数限制，防止无限循环
+const MAX_PAGES = 200 // 最大页数限制，防止无限循环
 const REQUEST_TIMEOUT = 12000 // 12秒超时
 const PAGE_LOAD_TIMEOUT = 60000 // 整个页面加载的最大时间（60秒）
 
@@ -144,7 +144,7 @@ export async function crawlNowCoder(username) {
 
 const RANK_REQUEST_TIMEOUT = 12000 // 12秒超时
 const RANK_PAGE_LOAD_TIMEOUT = 120000 // 整体爬取超时（120秒）
-const RANK_MAX_PAGES = 100 // 最大页数限制
+const RANK_MAX_PAGES = 300 // 最大页数限制
 
 /**
  * 爬取牛客网比赛排名数据
@@ -305,7 +305,6 @@ export async function crawlNowCoderContestRank(contestId) {
             score: item.fullScore || 0,
             timeCost: Math.floor((item.penaltyTime || 0) / 1000), // 转换为秒
             submitCount: 0,
-            problemScores: {},
             problemDetails: {} // ACM模式的详细信息
           }
 
@@ -319,7 +318,6 @@ export async function crawlNowCoderContestRank(contestId) {
               const problemIdNum = scoreItem.problemId || problemInfo?.problemId || ''
 
               // 基础得分（AC为100，否则为0）
-              ranking.problemScores[problemLetter] = scoreItem.accepted ? 100 : 0
               if (scoreItem.submit) {
                 totalSubmissions++
               }
