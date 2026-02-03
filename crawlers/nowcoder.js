@@ -242,11 +242,18 @@ export async function crawlNowCoderContestRank(contestId) {
           { timeout: RANK_REQUEST_TIMEOUT }
         )
         if (pageRes.ok) {
-          const $ = cheerio.load(pageRes.text)
-          contestName = $('.contest-name').text().trim() ||
-                        $('h1').first().text().trim() ||
-                        $('title').text().trim() ||
-                        `比赛${contestId}`
+          // 尝试从HTML中提取 competitionName_var
+          const match = pageRes.text.match(/competitionName_var":"([^"]+)"/)
+          if (match && match[1]) {
+            contestName = match[1]
+          } else {
+            // 如果没有找到，尝试其他方式
+            const $ = cheerio.load(pageRes.text)
+            contestName = $('.contest-name').text().trim() ||
+                          $('h1').first().text().trim() ||
+                          $('title').text().trim() ||
+                          `比赛${contestId}`
+          }
         }
       } catch (e) {
         // 忽略获取比赛名称的错误
