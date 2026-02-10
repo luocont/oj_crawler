@@ -1,15 +1,9 @@
 import { proxyGet, ProxyRequestError, ErrorCode } from '../proxyPool/middleware.js'
 import * as cheerio from 'cheerio'
 
-<<<<<<< HEAD
 const MAX_PAGES = 50 // 最大页数限制，防止无限循环
 const REQUEST_TIMEOUT = 20000 // 12秒超时
 const PAGE_LOAD_TIMEOUT = 300000 // 整个页面加载的最大时间（5分钟）
-=======
-const MAX_PAGES = 200 // 最大页数限制，防止无限循环
-const REQUEST_TIMEOUT = 12000 // 12秒超时
-const PAGE_LOAD_TIMEOUT = 60000 // 整个页面加载的最大时间（60秒）
->>>>>>> 142152f797366acbfb1237094051a24d6bd3c588
 
 /**
  * 爬取牛客网用户ACM提交数据
@@ -149,13 +143,8 @@ export async function crawlNowCoder(username) {
 }
 
 const RANK_REQUEST_TIMEOUT = 12000 // 12秒超时
-<<<<<<< HEAD
 const RANK_PAGE_LOAD_TIMEOUT = 300000 // 整体爬取超时（5分钟）
 const RANK_MAX_PAGES = 200 // 最大页数限制
-=======
-const RANK_PAGE_LOAD_TIMEOUT = 120000 // 整体爬取超时（120秒）
-const RANK_MAX_PAGES = 300 // 最大页数限制
->>>>>>> 142152f797366acbfb1237094051a24d6bd3c588
 
 /**
  * 爬取牛客网比赛排名数据
